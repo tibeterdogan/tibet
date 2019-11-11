@@ -1,0 +1,130 @@
+---
+title: "BDA-Assingment"
+author: "Tibet Erdoğan"
+date: "11 11 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+library("rvest")
+library("tidyverse")
+library("dplyr")
+library("lubridate")
+library("ggplot2")
+
+raw6<- read_html("https://bkm.com.tr/secilen-aya-ait-sektorel-gelisim/?filter_year=2019&filter_month=6&List=Listele")
+raw5<- read_html("https://bkm.com.tr/secilen-aya-ait-sektorel-gelisim/?filter_year=2019&filter_month=5&List=Listele")
+raw4<- read_html("https://bkm.com.tr/secilen-aya-ait-sektorel-gelisim/?filter_year=2019&filter_month=4&List=Listele")
+
+
+
+raw_table6 <- html_table(raw6,fill = TRUE)
+raw_table5 <- html_table(raw5,fill = TRUE)
+raw_table4 <- html_table(raw4,fill = TRUE)
+
+
+bkm_6<-raw_table6[[4]]
+bkm_5<-raw_table5[[4]]
+bkm_4<-raw_table4[[4]]
+
+
+bkm_6 <-add_column(bkm_6,tarih="06")
+bkm_5 <-add_column(bkm_5,tarih="05")
+bkm_4 <-add_column(bkm_4,tarih="04")
+
+names(bkm_6)<- c("Sektor","kk_isadet","bk_isadet","kk_istutar","bk_istutar","Tarih")
+names(bkm_5)<- c("Sektor","kk_isadet","bk_isadet","kk_istutar","bk_istutar","Tarih")
+names(bkm_4)<- c("Sektor","kk_isadet","bk_isadet","kk_istutar","bk_istutar","Tarih")
+
+bkm_6<-slice(bkm_6,3:28)
+bkm_5<-slice(bkm_5,3:28)
+bkm_4<-slice(bkm_4,3:28)
+
+
+bkm_full <- bind_rows(bkm_6,bkm_5,bkm_4)
+
+str(bkm_full)
+
+#data.frame':	78 obs. of  6 variables:
+#$ Isyeri_Grubu            : chr  "ARABA KİRALAMA" "ARAÇ KİRALAMA-SATIŞ/SERVİS/YEDEK PARÇA" "BENZİN VE #YAKIT İSTASYONLARI" "BIREYSEL EMEKLILIK" ...
+#$ Islem_Adedi_Kredi_Karti : chr  "306.426" "3.335.321" "32.572.382" "2.060.390" ...
+#$ Islem_Adedi_Banka_Karti : chr  "77.113" "902.483" "13.813.215" "1.256" ...
+#$ Islem_Tutari_Kredi_Karti: chr  "256,63" "2.588,91" "6.515,69" "686,98" ...
+#$ Islem_Tutari_Banka_Karti: chr  "43,79" "190,61" "1.195,27" "0,42" ...
+#$ Tarih                   : chr  "06" "06" "06" "06" ...
+
+
+bkm_full$kk_isadet <-as.numeric(gsub("\\.","",bkm_full$kk_isadet))
+bkm_full$bk_isadet <-as.numeric(gsub("\\.","",bkm_full$bk_isadet))
+bkm_full$kk_istutar <-as.numeric(gsub(",",".",gsub("\\.","",bkm_full$kk_istutar)))
+bkm_full$bk_istutar <-as.numeric(gsub(",",".",gsub("\\.","",bkm_full$bk_istutar)))
+bkm_full$Tarih <-as.numeric(gsub("\\.","",bkm_full$Tarih))
+
+str(bkm_full)
+
+aylikislemtoplami <- bkm_full %>%
+  group_by(Tarih) %>%
+  summarize(total_kk_isadet = sum(kk_isadet),
+            total_bk_isadet = sum(bk_isadet),
+            total_bk_istutar = sum(bk_istutar),
+            total_kk_istutar = sum(kk_istutar))
+
+aylikislemtoplami2 <- aylikislemtoplami %>% 
+  mutate(toplam_islem = total_kk_isadet + total_bk_isadet) %>%
+  mutate(toplam_tutar = total_bk_istutar + total_kk_istutar)
+
+end_aylikislem <- aylikislemtoplami2 %>%
+  select(toplam_islem,toplam_tutar,Tarih)
+
+#2019 yılı 4,5 ve 6. aylarının işlem tutarlarının karşılaştırması 
+
+ggplot(end_aylikislem,aes(x = Tarih, y= toplam_tutar)) +
+  geom_bar(stat = "identity" )
+
+#2019 yılı 4,5 ve 6. aylarının işlem adeti bazında karşılaştırması 
+
+ggplot(end_aylikislem,aes(x = Tarih, y= toplam_islem)) +
+  geom_bar(stat = "identity" )
+
+#Sektör Bazında Karşılaştırma(Sektorlere Değer verilerek karşılaştırılabilir.)
+
+sektor1 <- bkm_full %>%
+  mutate(toplam_islem = kk_isadet + bk_isadet) %>%
+  mutate(toplam_tutar = bk_istutar +kk_istutar)
+
+sektor <- sektor1 %>%
+  select(Sektor,toplam_islem,toplam_tutar)
+  
+
+ggplot(sektor, aes(x = Sektor)) +
+  geom_histogram(aes(y = toplam_tutar), stat = "identity",binwidth = 1, fill = "#377EB8")
+
+ggplot(sektor, aes(x = Sektor)) +
+  geom_histogram(aes(y = toplam_islem), stat = "identity",binwidth = 1, fill = "#377EB8")
+  
+# En Yüksek İşlem Adedine Sahip 5 Sektörün Histogramı
+
+islemegore <- sektor %>%
+  group_by(Sektor) %>%
+  summarize(toplam_islemsektor = sum(toplam_islem),
+            toplam_tutarsektor = sum(toplam_tutar)) %>%
+  arrange(desc(toplam_islemsektor))
+
+tutaragore <- sektor %>%
+  group_by(Sektor) %>%
+  summarize(toplam_islemsektor = sum(toplam_islem),
+            toplam_tutarsektor = sum(toplam_tutar)) %>%
+  arrange(desc(toplam_tutarsektor))
+  
+
+islemegoreilkbessektor <- head(islemegore,5)
+tutaragoreilkbessektor <- head(tutaragore,5)
+
+ggplot(islemegoreilkbessektor, aes(x = Sektor)) +
+  geom_histogram(aes(y = toplam_islemsektor), stat = "identity",binwidth = 1, fill = "#377EB8")
+
+ggplot(tutaragoreilkbessektor, aes(x = Sektor)) +
+  geom_histogram(aes(y = toplam_tutarsektor), stat = "identity",binwidth = 1, fill = "#377EB8")
