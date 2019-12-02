@@ -1,0 +1,57 @@
+---
+title: "SSS"
+author: "Tibet Erdoğan"
+date: "02 12 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+library(tidyverse) 
+library(dplyr) 
+load("C:/Users/Dell/Downloads/atp_tennis_data_2017.RData")
+
+## Rank Countries (Flag codes) by the singles champions
+
+```{r}
+
+country <- player_df %>% inner_join(tourney_df,by = c("player_id" ="singles_winner_player_id")) %>% 
+group_by(flag_code)%>% 
+summarize(total_wins = n()) %>% 
+arrange(desc(total_wins))
+
+```
+
+## Rank countries wihch did not get any single championships by the games won when they win the match
+
+```{r}
+non_champ <- player_df %>% anti_join(country)
+non_champ_win <- non_champ %>% left_join(score_df,by = c("player_id" = "winner_player_id")) %>% group_by(flag_code) %>% summarise(total_won = sum(winner_games_won, na.rm = TRUE)) %>% arrange(desc(total_won))
+
+```
+
+
+## Players who win most in finals
+```{r}
+players_best <- score_df %>% inner_join(player_df,by = c("winner_player_id" = "player_id")) %>% select(tourney_round_name,first_name,last_name,flag_code,winner_player_id) %>% group_by(tourney_round_name,first_name,last_name) %>% filter(tourney_round_name == "Finals") %>% count(winner_player_id, sort = TRUE ) %>% filter(n > 2)
+```
+
+## Countries of the fault winners in matches
+```{r}
+no_fault <- stats_df %>% select(match_id, winner_double_faults) %>% filter(winner_double_faults != 0)
+player_score <- score_df %>% select(match_id, winner_player_id)
+no_fault_players <- no_fault %>% inner_join(., player_score, by = c("match_id"))
+no_fault_countries <- no_fault_players %>% 
+left_join(., player_df, by = c("winner_player_id"= "player_id")) %>% count(flag_code, sort = TRUE)
+```
+
+## Rank players who have never break in matches by match duration, adding country
+
+```{r}
+no_break_match <- stats_df %>% select(match_id, winner_break_points_saved, match_duration) %>% filter(winner_break_points_saved != 0) countries_player <- player_df %>% select(player_id, player_slug, flag_code)
+no_break_players <- no_break_match %>% left_join(., player_score, by = c("match_id")) %>% group_by(winner_player_id) %>% summarise(total_duration = sum(match_duration, na.rm = TRUE)) %>% left_join(., countries_player, by = c("winner_player_id" = "player_id")) %>% arrange(desc(total_duration))
+
+
+```
